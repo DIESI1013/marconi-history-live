@@ -4,6 +4,7 @@ from http.server import BaseHTTPRequestHandler,ThreadingHTTPServer
 from pathlib import Path
 from urllib.parse import parse_qs,urlsplit
 from zoneinfo import ZoneInfo
+import mytuner_backend
 
 ROOT=Path(__file__).resolve().parent
 DB=Path(os.environ.get("DATA_PATH","/tmp/marconi_history_live.sqlite3"))
@@ -51,7 +52,11 @@ class Handler(BaseHTTPRequestHandler):
         p=urlsplit(self.path); q=parse_qs(p.query)
         try:
             if p.path=="/":
+                return self.send_data(200,(ROOT/"mytuner.html").read_bytes(),"text/html; charset=utf-8")
+            if p.path=="/local":
                 return self.send_data(200,(ROOT/"dashboard.html").read_bytes(),"text/html; charset=utf-8")
+            if p.path.startswith("/api/mt/"):
+                return mytuner_backend.get(self,p.path,q)
             if p.path in ("/healthz","/api/status"):
                 with connect() as c:
                     instance=c.execute("SELECT value FROM meta WHERE key='instance_id'").fetchone()[0]
@@ -89,6 +94,8 @@ class Handler(BaseHTTPRequestHandler):
             print("GET ERROR",type(e).__name__,str(e),flush=True)
             return self.send_data(500,{"error":"internal error"})
     def do_POST(self):
+        if self.path=="/api/mt/push":
+            return mytuner_backend.push(self)
         if self.path!="/api/push":return self.send_data(404,{"error":"not found"})
         if not SECRET:return self.send_data(503,{"error":"not configured"})
         if not hmac.compare_digest(self.headers.get("Authorization",""),"Bearer "+SECRET):
@@ -123,6 +130,7 @@ class Handler(BaseHTTPRequestHandler):
 
 if __name__=="__main__":
     init_db()
+    mytuner_backend.init()
     port=int(os.environ.get("PORT","10000"))
     print("Marconi History Dashboard listening on",port,flush=True)
     ThreadingHTTPServer(("0.0.0.0",port),Handler).serve_forever()
