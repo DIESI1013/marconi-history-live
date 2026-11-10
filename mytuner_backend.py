@@ -1,6 +1,7 @@
 """Separate myTuner playlist store. Does not query Marconi Soundintel."""
 import json,os,sqlite3,threading,hmac,secrets,time
 from datetime import datetime,timezone,timedelta
+from zoneinfo import ZoneInfo
 from pathlib import Path
 from urllib.parse import parse_qs,urlsplit
 DB=Path(os.environ.get("MYTUNER_DB","/tmp/mytuner_playlist_history.sqlite3"))
@@ -60,8 +61,8 @@ def get(handler,p,q):
         where="radio_id=?"; params=[rid]
         if day:
             try:
-                d=datetime.strptime(day,"%Y-%m-%d").replace(tzinfo=timezone.utc)
-                start=int(d.timestamp());end=start+86400
+                d=datetime.strptime(day,"%Y-%m-%d").replace(tzinfo=ZoneInfo("Europe/Athens"))
+                start=int(d.timestamp());end=int((d+timedelta(days=1)).timestamp())
             except ValueError:return reply(handler,{"error":"invalid date"},400)
             where+=" AND started>=? AND started<?";params.extend([start,end])
         params.append(limit)
